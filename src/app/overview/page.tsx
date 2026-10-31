@@ -8,10 +8,11 @@ import {
   Row,
 } from "@/components/ui";
 import { bookBalances } from "@/lib/balances";
-import { getHousehold } from "@/lib/household";
+import { getHousehold, workingMonthKey } from "@/lib/household";
 import { won } from "@/lib/money";
 import {
   currentMonthKey,
+  isMonthKey,
   monthDate,
   monthParts,
   shiftMonth,
@@ -20,15 +21,31 @@ import { spending, type MonthSummary } from "@/lib/summary";
 
 export const dynamic = "force-dynamic";
 
-export default async function OverviewPage() {
-  const key = currentMonthKey();
-  const { year, month, en } = monthParts(key);
+export default async function OverviewPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ m?: string }>;
+}) {
+  const { m } = await searchParams;
   const { supabase, householdId } = await getHousehold();
+  const key =
+    m && isMonthKey(m)
+      ? m
+      : householdId
+        ? await workingMonthKey(supabase, householdId)
+        : currentMonthKey();
+  const { year, month, en } = monthParts(key);
 
   const header = (
     <PageHeader
       eyebrow={`${year} · ${en}`}
       title={`${month}월의 살림`}
+      right={
+        <div className="flex text-lg text-brown">
+          <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, -1)}`} aria-label="이전 달">‹</Link>
+          <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, 1)}`} aria-label="다음 달">›</Link>
+        </div>
+      }
     />
   );
 
@@ -102,7 +119,12 @@ export default async function OverviewPage() {
         </CardTitle>
         <div className="flex h-28 items-end justify-between gap-2 px-1">
           {bars.map((b, i) => (
-            <div key={b.key} className="flex flex-1 flex-col items-center gap-1">
+            <Link
+              key={b.key}
+              href={`/overview?m=${b.key}`}
+              aria-label={`${b.label}월 보기`}
+              className="flex flex-1 flex-col items-center gap-1"
+            >
               <span className="text-[10.5px] text-muted">
                 {b.total ? Math.round(b.total / 10000) : ""}
               </span>
@@ -110,8 +132,8 @@ export default async function OverviewPage() {
                 className={`w-[18px] rounded ${i === bars.length - 1 ? "bg-caramel" : "bg-line-strong"}`}
                 style={{ height: `${Math.round((b.total / max) * 68)}px` }}
               />
-              <span className="text-[11px] text-muted">{b.label}월</span>
-            </div>
+              <span className={`text-[11px] ${i === bars.length - 1 ? "font-bold text-caramel-deep" : "text-muted"}`}>{b.label}월</span>
+            </Link>
           ))}
         </div>
       </Card>
@@ -120,7 +142,7 @@ export default async function OverviewPage() {
         href={`/settle/${key}`}
         className="flex h-12 items-center justify-center rounded-xl bg-brown text-sm font-medium text-paper"
       >
-        {month}월 정산 {now ? "이어하기" : "시작하기"}
+        {now?.status === "closed" ? `${month}월 정산 보기` : `${month}월 정산 ${now ? "이어하기" : "시작하기"}`}
       </Link>
 
       <BottomNav active="/overview" />
