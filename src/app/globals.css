@@ -17,7 +17,7 @@
   --color-warn-tint: #fef3c7;
 
   --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
-  --font-serif: var(--font-noto-serif-kr), "Nanum Myeongjo", serif;
+  --font-serif: "Noto Serif KR", "Nanum Myeongjo", serif;
 }
 
 html,
