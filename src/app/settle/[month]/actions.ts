@@ -41,7 +41,7 @@ export async function addIncome(fd: FormData) {
 export async function deleteRow(fd: FormData) {
   const { supabase, householdId, key } = await context(fd);
   const table = text(fd, "table");
-  if (!["incomes", "expense_items", "savings"].includes(table)) return;
+  if (!["incomes", "expense_items", "savings", "adjustments"].includes(table)) return;
   await supabase
     .from(table)
     .delete()
@@ -172,4 +172,51 @@ export async function saveCash(fd: FormData) {
     .eq("household_id", householdId)
     .eq("month", month);
   done(key);
+}
+
+export async function saveBalance(fd: FormData) {
+  const { supabase, householdId, key, month } = await context(fd);
+  const actual = parseWon(fd.get("actual"));
+  const accountId = text(fd, "account_id");
+  if (actual === null) {
+    await supabase
+      .from("balance_checks")
+      .delete()
+      .eq("household_id", householdId)
+      .eq("month", month)
+      .eq("account_id", accountId);
+  } else {
+    await supabase.from("balance_checks").upsert(
+      { household_id: householdId, month, account_id: accountId, actual, checked_at: new Date().toISOString() },
+      { onConflict: "household_id,month,account_id" },
+    );
+  }
+  done(key);
+}
+
+export async function addAdjustment(fd: FormData) {
+  const { supabase, householdId, key, month } = await context(fd);
+  const amount = parseWon(fd.get("amount"));
+  const memo = text(fd, "memo");
+  if (amount === null || amount === 0 || !memo) return;
+  await supabase.from("adjustments").insert({
+    household_id: householdId,
+    month,
+    account_id: text(fd, "account_id"),
+    amount,
+    memo,
+  });
+  done(key);
+}
+
+export async function setMonthStatus(fd: FormData) {
+  const { supabase, householdId, key, month } = await context(fd);
+  const closed = text(fd, "status") === "closed";
+  await supabase
+    .from("months")
+    .update({ status: closed ? "closed" : "draft", closed_at: closed ? new Date().toISOString() : null })
+    .eq("household_id", householdId)
+    .eq("month", month);
+  done(key);
+  revalidatePath("/history");
 }

@@ -1,9 +1,11 @@
 import { MARRIED_ON, MET_ON, daysSince, formatDotDate } from "@/lib/dday";
+import { currentLoginPhoto } from "@/lib/photo";
 import { LoginForm } from "./login-form";
 
 export const dynamic = "force-dynamic";
 
-export default function LoginPage() {
+export default async function LoginPage() {
+  const photo = await currentLoginPhoto();
   const met = daysSince(MET_ON).toLocaleString("ko-KR");
   const married = daysSince(MARRIED_ON).toLocaleString("ko-KR");
 
@@ -40,20 +42,28 @@ export default function LoginPage() {
         </div>
       </div>
 
-      {/* 사진 업로드(설정 화면)는 다음 단계에서 붙인다 */}
       <div className="relative h-[420px] shrink-0">
         <div
           aria-hidden
           className="absolute top-3.5 right-[-2px] bottom-[-2px] left-3.5 rounded-t-[167px] rounded-b-md border border-caramel"
         />
-        <div
-          role="img"
-          aria-label="우리 사진 자리"
-          className="absolute top-0 right-3.5 bottom-3.5 left-0 flex flex-col items-center justify-center gap-1 rounded-t-[160px] rounded-b-md bg-[#dcd5c6] text-muted"
-        >
-          <span className="text-[12.5px] font-medium">[우리 사진]</span>
-          <span className="text-[11px]">설정에서 바꿀 수 있어요</span>
-        </div>
+        {photo ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={photo}
+            alt="우리 사진"
+            className="absolute top-0 right-3.5 bottom-3.5 left-0 h-[calc(100%-14px)] w-[calc(100%-14px)] rounded-t-[160px] rounded-b-md object-cover"
+          />
+        ) : (
+          <div
+            role="img"
+            aria-label="우리 사진 자리"
+            className="absolute top-0 right-3.5 bottom-3.5 left-0 flex flex-col items-center justify-center gap-1 rounded-t-[160px] rounded-b-md bg-[#dcd5c6] text-muted"
+          >
+            <span className="text-[12.5px] font-medium">[우리 사진]</span>
+            <span className="text-[11px]">설정에서 바꿀 수 있어요</span>
+          </div>
+        )}
       </div>
 
       <h1 className="flex flex-col font-serif text-[28px] leading-[1.22] font-semibold tracking-[-0.5px]">
