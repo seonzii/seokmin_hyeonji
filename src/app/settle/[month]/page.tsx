@@ -1,10 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ActionForm } from "@/components/action-form";
+import { AmountInput } from "@/components/amount-input";
+import { AutoSaveField } from "@/components/auto-save";
+import { DeleteButton, UndoProvider } from "@/components/undo-delete";
 import {
   BottomNav,
   Card,
   CardTitle,
-  DeleteButton,
   GhostButton,
   inputClass,
   NotLinked,
@@ -24,6 +27,7 @@ import {
   addSaving,
   confirmFixed,
   deleteRow,
+  restoreRow,
   saveBalance,
   saveCardTotal,
   saveCash,
@@ -165,15 +169,11 @@ export default async function SettlePage({
 
   const hidden = <input type="hidden" name="month" value={key} />;
   const del = (table: string, id: string) => (
-    <form action={deleteRow}>
-      {hidden}
-      <input type="hidden" name="table" value={table} />
-      <input type="hidden" name="id" value={id} />
-      <DeleteButton />
-    </form>
+    <DeleteButton fields={{ month: key, table, id }} disabled={closed} />
   );
 
   return (
+    <UndoProvider deleteAction={deleteRow} restoreAction={restoreRow}>
     <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col gap-4 px-5 pt-6 pb-24">
       {header}
 
@@ -208,7 +208,7 @@ export default async function SettlePage({
             action={del("incomes", r.id)}
           />
         ))}
-        <form action={addIncome} className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
+        <ActionForm action={addIncome} resetOnSuccess className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
           {hidden}
           <select name="owner" className={selectClass} aria-label="누구">
             {OWNERS.map((o) => <option key={o}>{o}</option>)}
@@ -217,9 +217,9 @@ export default async function SettlePage({
             {Object.entries(INCOME_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
           </select>
           <input name="title" placeholder="항목 (월급, 더치…)" className={inputClass} required />
-          <input name="amount" inputMode="numeric" placeholder="금액" className={inputClass} required />
+          <AmountInput name="amount" placeholder="금액" className={inputClass} required />
           <GhostButton type="submit" className="col-span-2">+ 수입 추가</GhostButton>
-        </form>
+        </ActionForm>
       </Card>
 
       {/* 2. 카드 */}
@@ -236,19 +236,19 @@ export default async function SettlePage({
                 {card.owner_name} · {accName(card.payment_account_id)}
               </span>
             </CardTitle>
-            <form action={saveCardTotal} className="mb-2 flex gap-2">
-              {hidden}
-              <input type="hidden" name="card_id" value={card.id} />
-              <input
+            <div className="mb-2 flex gap-2">
+              <AutoSaveField
+                action={saveCardTotal}
+                fields={{ month: key, card_id: card.id }}
                 name="total"
-                inputMode="numeric"
+                amount
                 defaultValue={total ? won(total) : ""}
-                placeholder="청구 총액"
+                placeholder="청구 총액 (입력하면 저장돼요)"
                 aria-label={`${card.name} 청구 총액`}
-                className={`${inputClass} flex-1`}
+                className={inputClass}
+                disabled={closed}
               />
-              <GhostButton type="submit">저장</GhostButton>
-            </form>
+            </div>
             {its.map((i) => (
               <Row
                 key={i.id}
@@ -258,14 +258,14 @@ export default async function SettlePage({
                 action={i.template_id ? undefined : del("expense_items", i.id)}
               />
             ))}
-            <form action={addCardItem} className="mt-2 flex gap-2">
+            <ActionForm action={addCardItem} resetOnSuccess className="mt-2 flex flex-wrap gap-2">
               {hidden}
               <input type="hidden" name="card_id" value={card.id} />
               <input type="hidden" name="kind" value="expense" />
-              <input name="title" placeholder="큰 항목" className={`${inputClass} flex-1`} required />
-              <input name="amount" inputMode="numeric" placeholder="금액" className={`${inputClass} w-28`} required />
+              <input name="title" placeholder="큰 항목" className={`${inputClass} min-w-0 flex-1`} required />
+              <AmountInput name="amount" placeholder="금액" className={`${inputClass} w-28`} required />
               <GhostButton type="submit" aria-label="큰 항목 추가">+</GhostButton>
-            </form>
+            </ActionForm>
             <div className="mt-3 flex items-center justify-between rounded-lg bg-caramel-tint px-3 py-2.5 text-sm text-caramel-deep">
               <span>생활비 (자동 계산)</span>
               <span className={living < 0 ? "text-warn" : ""}>{won(living)}</span>
@@ -286,7 +286,7 @@ export default async function SettlePage({
             ? "확정했어요. 금액을 고치고 다시 확정할 수 있어요."
             : "지난달 금액을 채워 뒀어요. 바뀐 것만 고치고 확정하세요."}
         </p>
-        <form action={confirmFixed}>
+        <ActionForm action={confirmFixed}>
           {hidden}
           {templates.map((t) => {
             const v = thisFixed.get(t.id) ?? prevFixed.get(t.id) ?? Number(t.default_amount);
@@ -298,9 +298,8 @@ export default async function SettlePage({
                     {t.owner_name} · {t.card_id ? cardName(t.card_id) : accName(t.account_id)}
                   </div>
                 </div>
-                <input
+                <AmountInput
                   name={`amount_${t.id}`}
-                  inputMode="numeric"
                   defaultValue={v ? won(v) : ""}
                   aria-label={`${t.title} 금액`}
                   className={`${inputClass} w-32 text-right`}
@@ -311,7 +310,7 @@ export default async function SettlePage({
           <PrimaryButton type="submit" className="mt-3 w-full">
             {fixedConfirmed ? "다시 확정" : `${month}월 고정지출 확정`}
           </PrimaryButton>
-        </form>
+        </ActionForm>
       </Card>
 
       {/* 4. 저축 · 투자 */}
@@ -326,7 +325,7 @@ export default async function SettlePage({
             action={del("savings", s.id)}
           />
         ))}
-        <form action={addSaving} className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
+        <ActionForm action={addSaving} resetOnSuccess className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
           {hidden}
           <select name="owner" className={selectClass} aria-label="누구">
             {OWNERS.map((o) => <option key={o}>{o}</option>)}
@@ -349,27 +348,30 @@ export default async function SettlePage({
                 .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
             </select>
           </label>
-          <input name="amount" inputMode="numeric" placeholder="금액" className={`${inputClass} col-span-2`} required />
+          <AmountInput name="amount" placeholder="금액" className={`${inputClass} col-span-2`} required />
           <GhostButton type="submit" className="col-span-2">+ 저축 · 투자 추가</GhostButton>
-        </form>
+        </ActionForm>
       </Card>
 
       {/* 5. 현금 */}
       <Card id="cash" className="scroll-mt-4">
         <CardTitle>5. 현금</CardTitle>
-        <form action={saveCash} className="flex flex-col gap-2">
-          {hidden}
-          <label className="flex items-center justify-between gap-3 text-sm">
-            축의금 (현금 지출)
-            <input name="gift_cash" inputMode="numeric" defaultValue={monthRow?.gift_cash ? won(monthRow.gift_cash) : ""} placeholder="0" className={`${inputClass} w-36 text-right`} />
-          </label>
-          <label className="flex items-center justify-between gap-3 text-sm">
-            집 보관 현금 증감
-            <input name="new_cash" inputMode="numeric" defaultValue={monthRow?.new_cash ? won(monthRow.new_cash) : ""} placeholder="0" className={`${inputClass} w-36 text-right`} />
-          </label>
-          <input name="note" defaultValue={monthRow?.note ?? ""} placeholder="메모" className={inputClass} />
-          <GhostButton type="submit">저장</GhostButton>
-        </form>
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="shrink-0">축의금 (현금 지출)</span>
+            <div className="w-40">
+              <AutoSaveField action={saveCash} fields={{ month: key }} name="gift_cash" amount defaultValue={monthRow?.gift_cash ? won(monthRow.gift_cash) : ""} placeholder="0" aria-label="축의금" className={`${inputClass} text-right`} disabled={closed} />
+            </div>
+          </div>
+          <div className="flex items-center justify-between gap-3 text-sm">
+            <span className="shrink-0">집 보관 현금 증감</span>
+            <div className="w-40">
+              <AutoSaveField action={saveCash} fields={{ month: key }} name="new_cash" amount defaultValue={monthRow?.new_cash ? won(monthRow.new_cash) : ""} placeholder="0" aria-label="집 보관 현금 증감" className={`${inputClass} text-right`} disabled={closed} />
+            </div>
+          </div>
+          <AutoSaveField action={saveCash} fields={{ month: key }} name="note" defaultValue={monthRow?.note ?? ""} placeholder="메모" aria-label="메모" className={inputClass} disabled={closed} />
+          <p className="text-xs text-muted">입력하고 다른 곳을 누르면 저장돼요.</p>
+        </div>
       </Card>
 
       </fieldset>
@@ -389,19 +391,18 @@ export default async function SettlePage({
                 <span>{account.name}</span>
                 <span className="text-muted">장부 {won(book)}</span>
               </div>
-              <form action={saveBalance} className="mt-2 flex gap-2">
-                {hidden}
-                <input type="hidden" name="account_id" value={account.id} />
-                <input
+              <div className="mt-2 flex gap-2">
+                <AutoSaveField
+                  action={saveBalance}
+                  fields={{ month: key, account_id: account.id }}
                   name="actual"
-                  inputMode="numeric"
+                  amount
                   defaultValue={actual === undefined ? "" : won(actual)}
-                  placeholder="실제 잔액"
+                  placeholder="실제 잔액 (입력하면 저장돼요)"
                   aria-label={`${account.name} 실제 잔액`}
-                  className={`${inputClass} flex-1`}
+                  className={inputClass}
                 />
-                <GhostButton type="submit">확인</GhostButton>
-              </form>
+              </div>
               <div
                 className={`mt-2 rounded-lg px-3 py-2 text-[13px] ${
                   diff === null
@@ -434,18 +435,18 @@ export default async function SettlePage({
               action={closed ? undefined : del("adjustments", j.id)}
             />
           ))}
-          <form action={addAdjustment} className="mt-2 grid grid-cols-2 gap-2">
+          <ActionForm action={addAdjustment} resetOnSuccess className="mt-2 grid grid-cols-2 gap-2">
             {hidden}
             <select name="account_id" className={`${selectClass} col-span-2`} aria-label="계좌">
               {books.map(({ account }) => <option key={account.id} value={account.id}>{account.name}</option>)}
             </select>
-            <input name="amount" inputMode="numeric" placeholder="금액 (빠지면 -)" className={inputClass} required disabled={closed} />
+            <AmountInput name="amount" placeholder="금액 (빠지면 -)" className={inputClass} required disabled={closed} />
             <input name="memo" placeholder="메모" className={inputClass} required disabled={closed} />
             <GhostButton type="submit" className="col-span-2" disabled={closed}>+ 보정 추가</GhostButton>
-          </form>
+          </ActionForm>
         </details>
 
-        <form action={setMonthStatus} className="mt-4">
+        <ActionForm action={setMonthStatus} className="mt-4">
           {hidden}
           <input type="hidden" name="status" value={closed ? "draft" : "closed"} />
           {closed ? (
@@ -456,10 +457,11 @@ export default async function SettlePage({
           <p className="mt-2 text-center text-xs text-muted">
             마감하면 {month}월은 잠기고, 장부 잔액이 다음 달로 이어져요
           </p>
-        </form>
+        </ActionForm>
       </Card>
 
       <BottomNav active="/settle" />
     </main>
+    </UndoProvider>
   );
 }
