@@ -1,0 +1,362 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import {
+  BottomNav,
+  Card,
+  CardTitle,
+  DeleteButton,
+  GhostButton,
+  inputClass,
+  NotLinked,
+  PageHeader,
+  PrimaryButton,
+  Row,
+  selectClass,
+} from "@/components/ui";
+import { ensureMonth, getHousehold } from "@/lib/household";
+import { won } from "@/lib/money";
+import { isMonthKey, monthDate, monthParts, shiftMonth } from "@/lib/month";
+import {
+  addCardItem,
+  addIncome,
+  addSaving,
+  confirmFixed,
+  deleteRow,
+  saveCardTotal,
+  saveCash,
+} from "./actions";
+
+export const dynamic = "force-dynamic";
+
+type Account = { id: string; name: string; kind: string };
+type CardRow = { id: string; name: string; owner_name: string; payment_account_id: string | null };
+type Template = {
+  id: string;
+  title: string;
+  default_amount: number;
+  owner_name: string | null;
+  card_id: string | null;
+  account_id: string | null;
+};
+type Income = { id: string; owner_name: string; kind: string; title: string; amount: number };
+type Bill = { id: string; card_id: string; total: number };
+type Item = {
+  id: string;
+  kind: "expense" | "fixed";
+  title: string;
+  amount: number;
+  card_bill_id: string | null;
+  account_id: string | null;
+  owner_name: string | null;
+  template_id: string | null;
+};
+type Saving = {
+  id: string;
+  owner_name: string;
+  kind: "saving" | "investment";
+  amount: number;
+  from_account_id: string;
+  to_account_id: string;
+};
+
+const OWNERS = ["석민", "현지"];
+const INCOME_KIND: Record<string, string> = { salary: "월급", dutch: "더치", other: "기타" };
+const SECTIONS = [
+  ["income", "수입"],
+  ["cards", "카드"],
+  ["fixed", "고정지출"],
+  ["saving", "저축"],
+  ["cash", "현금"],
+] as const;
+
+export default async function SettlePage({
+  params,
+}: {
+  params: Promise<{ month: string }>;
+}) {
+  const { month: key } = await params;
+  if (!isMonthKey(key)) notFound();
+  const { year, month, en } = monthParts(key);
+  const m = monthDate(key);
+  const prev = monthDate(shiftMonth(key, -1));
+
+  const { supabase, householdId } = await getHousehold();
+  const header = (
+    <PageHeader
+      eyebrow={`${year} · ${en}`}
+      title={`${month}월 정산`}
+      right={
+        <div className="flex gap-1 text-sm text-brown">
+          <Link className="flex size-11 items-center justify-center" href={`/settle/${shiftMonth(key, -1)}`} aria-label="이전 달">‹</Link>
+          <Link className="flex size-11 items-center justify-center" href={`/settle/${shiftMonth(key, 1)}`} aria-label="다음 달">›</Link>
+        </div>
+      }
+    />
+  );
+  if (!householdId) {
+    return (
+      <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col gap-4 px-5 pt-6 pb-24">
+        {header}
+        <NotLinked />
+        <BottomNav active="/settle" />
+      </main>
+    );
+  }
+
+  await ensureMonth(supabase, householdId, m);
+  const h = householdId;
+  const [acc, crd, tpl, inc, bil, itm, prevItm, sav, mon] = await Promise.all([
+    supabase.from("accounts").select("id, name, kind").eq("household_id", h).eq("active", true).order("sort_order"),
+    supabase.from("cards").select("id, name, owner_name, payment_account_id").eq("household_id", h).eq("active", true).order("sort_order"),
+    supabase.from("fixed_templates").select("*").eq("household_id", h).eq("active", true).order("sort_order"),
+    supabase.from("incomes").select("*").eq("household_id", h).eq("month", m).order("created_at"),
+    supabase.from("card_bills").select("id, card_id, total").eq("household_id", h).eq("month", m),
+    supabase.from("expense_items").select("*").eq("household_id", h).eq("month", m).order("created_at"),
+    supabase.from("expense_items").select("template_id, amount").eq("household_id", h).eq("month", prev).not("template_id", "is", null),
+    supabase.from("savings").select("*").eq("household_id", h).eq("month", m),
+    supabase.from("months").select("gift_cash, new_cash, note, status").eq("household_id", h).eq("month", m).single(),
+  ]);
+
+  const accounts = (acc.data ?? []) as Account[];
+  const cards = (crd.data ?? []) as CardRow[];
+  const templates = (tpl.data ?? []) as Template[];
+  const incomes = (inc.data ?? []) as Income[];
+  const bills = (bil.data ?? []) as Bill[];
+  const items = (itm.data ?? []) as Item[];
+  const savings = (sav.data ?? []) as Saving[];
+  const monthRow = mon.data as { gift_cash: number; new_cash: number; note: string | null } | null;
+
+  const accName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? "";
+  const cardName = (id: string | null) => cards.find((c) => c.id === id)?.name ?? "";
+
+  const incomeTotal = incomes.reduce((s, r) => s + Number(r.amount), 0);
+  const thisFixed = new Map(items.filter((i) => i.template_id).map((i) => [i.template_id!, Number(i.amount)]));
+  const prevFixed = new Map(
+    ((prevItm.data ?? []) as { template_id: string; amount: number }[]).map((i) => [i.template_id, Number(i.amount)]),
+  );
+  const fixedConfirmed = thisFixed.size > 0;
+  const fixedTotal = items.filter((i) => i.kind === "fixed").reduce((s, i) => s + Number(i.amount), 0);
+  const savingTotal = savings.reduce((s, r) => s + Number(r.amount), 0);
+  const kakao = accounts.find((a) => a.kind === "source");
+
+  let cardExpense = 0;
+  const cardViews = cards.map((c) => {
+    const bill = bills.find((b) => b.card_id === c.id);
+    const its = bill ? items.filter((i) => i.card_bill_id === bill.id) : [];
+    const detail = its.reduce((s, i) => s + Number(i.amount), 0);
+    const total = Number(bill?.total ?? 0);
+    const living = total - detail;
+    cardExpense += living + its.filter((i) => i.kind === "expense").reduce((s, i) => s + Number(i.amount), 0);
+    return { card: c, bill, items: its, total, living };
+  });
+
+  const hidden = <input type="hidden" name="month" value={key} />;
+  const del = (table: string, id: string) => (
+    <form action={deleteRow}>
+      {hidden}
+      <input type="hidden" name="table" value={table} />
+      <input type="hidden" name="id" value={id} />
+      <DeleteButton />
+    </form>
+  );
+
+  return (
+    <main className="mx-auto flex min-h-dvh max-w-[430px] flex-col gap-4 px-5 pt-6 pb-24">
+      {header}
+
+      <nav className="-mx-5 flex gap-2 overflow-x-auto px-5">
+        {SECTIONS.map(([id, label], i) => (
+          <a
+            key={id}
+            href={`#${id}`}
+            className="flex h-9 shrink-0 items-center rounded-full border border-line-strong bg-card px-3.5 text-[13px] text-muted"
+          >
+            {i + 1}. {label}
+          </a>
+        ))}
+      </nav>
+
+      {/* 1. 수입 */}
+      <Card id="income" className="scroll-mt-4">
+        <CardTitle right={won(incomeTotal)}>1. 수입</CardTitle>
+        {incomes.map((r) => (
+          <Row
+            key={r.id}
+            label={r.title}
+            sub={`${r.owner_name} · ${INCOME_KIND[r.kind] ?? r.kind}`}
+            value={won(r.amount)}
+            action={del("incomes", r.id)}
+          />
+        ))}
+        <form action={addIncome} className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
+          {hidden}
+          <select name="owner" className={selectClass} aria-label="누구">
+            {OWNERS.map((o) => <option key={o}>{o}</option>)}
+          </select>
+          <select name="kind" className={selectClass} aria-label="종류">
+            {Object.entries(INCOME_KIND).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+          </select>
+          <input name="title" placeholder="항목 (월급, 더치…)" className={inputClass} required />
+          <input name="amount" inputMode="numeric" placeholder="금액" className={inputClass} required />
+          <GhostButton type="submit" className="col-span-2">+ 수입 추가</GhostButton>
+        </form>
+      </Card>
+
+      {/* 2. 카드 */}
+      <section id="cards" className="flex scroll-mt-4 flex-col gap-3">
+        <div className="flex items-baseline justify-between px-1">
+          <h2 className="text-[15px] font-semibold">2. 카드</h2>
+          <span className="text-xs text-muted">청구 총액과 큰 항목만 입력</span>
+        </div>
+        {cardViews.map(({ card, items: its, total, living }) => (
+          <Card key={card.id}>
+            <CardTitle right={won(total)}>
+              {card.name}
+              <span className="ml-1.5 text-xs font-normal text-muted">
+                {card.owner_name} · {accName(card.payment_account_id)}
+              </span>
+            </CardTitle>
+            <form action={saveCardTotal} className="mb-2 flex gap-2">
+              {hidden}
+              <input type="hidden" name="card_id" value={card.id} />
+              <input
+                name="total"
+                inputMode="numeric"
+                defaultValue={total ? won(total) : ""}
+                placeholder="청구 총액"
+                aria-label={`${card.name} 청구 총액`}
+                className={`${inputClass} flex-1`}
+              />
+              <GhostButton type="submit">저장</GhostButton>
+            </form>
+            {its.map((i) => (
+              <Row
+                key={i.id}
+                label={i.title}
+                sub={i.kind === "fixed" ? "고정지출" : undefined}
+                value={won(i.amount)}
+                action={i.template_id ? undefined : del("expense_items", i.id)}
+              />
+            ))}
+            <form action={addCardItem} className="mt-2 flex gap-2">
+              {hidden}
+              <input type="hidden" name="card_id" value={card.id} />
+              <input type="hidden" name="kind" value="expense" />
+              <input name="title" placeholder="큰 항목" className={`${inputClass} flex-1`} required />
+              <input name="amount" inputMode="numeric" placeholder="금액" className={`${inputClass} w-28`} required />
+              <GhostButton type="submit" aria-label="큰 항목 추가">+</GhostButton>
+            </form>
+            <div className="mt-3 flex items-center justify-between rounded-lg bg-caramel-tint px-3 py-2.5 text-sm text-caramel-deep">
+              <span>생활비 (자동 계산)</span>
+              <span className={living < 0 ? "text-warn" : ""}>{won(living)}</span>
+            </div>
+          </Card>
+        ))}
+        <div className="flex items-center justify-between rounded-2xl bg-brown px-4 py-3.5 text-paper">
+          <span className="text-sm">카드 지출 합계 (고정 제외)</span>
+          <span className="font-semibold">{won(cardExpense)}</span>
+        </div>
+      </section>
+
+      {/* 3. 고정지출 */}
+      <Card id="fixed" className="scroll-mt-4">
+        <CardTitle right={won(fixedTotal)}>3. 고정지출</CardTitle>
+        <p className="mb-2 text-xs text-muted">
+          {fixedConfirmed
+            ? "확정했어요. 금액을 고치고 다시 확정할 수 있어요."
+            : "지난달 금액을 채워 뒀어요. 바뀐 것만 고치고 확정하세요."}
+        </p>
+        <form action={confirmFixed}>
+          {hidden}
+          {templates.map((t) => {
+            const v = thisFixed.get(t.id) ?? prevFixed.get(t.id) ?? Number(t.default_amount);
+            return (
+              <div key={t.id} className="flex min-h-12 items-center gap-2 border-t border-line py-1.5 first-of-type:border-t-0">
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm">{t.title}</div>
+                  <div className="truncate text-xs text-muted">
+                    {t.owner_name} · {t.card_id ? cardName(t.card_id) : accName(t.account_id)}
+                  </div>
+                </div>
+                <input
+                  name={`amount_${t.id}`}
+                  inputMode="numeric"
+                  defaultValue={v ? won(v) : ""}
+                  aria-label={`${t.title} 금액`}
+                  className={`${inputClass} w-32 text-right`}
+                />
+              </div>
+            );
+          })}
+          <PrimaryButton type="submit" className="mt-3 w-full">
+            {fixedConfirmed ? "다시 확정" : `${month}월 고정지출 확정`}
+          </PrimaryButton>
+        </form>
+      </Card>
+
+      {/* 4. 저축 · 투자 */}
+      <Card id="saving" className="scroll-mt-4">
+        <CardTitle right={won(savingTotal)}>4. 저축 · 투자</CardTitle>
+        {savings.map((s) => (
+          <Row
+            key={s.id}
+            label={`${s.kind === "investment" ? "투자" : "저축"} · ${accName(s.to_account_id)}`}
+            sub={`${s.owner_name} · ${accName(s.from_account_id)}에서`}
+            value={won(s.amount)}
+            action={del("savings", s.id)}
+          />
+        ))}
+        <form action={addSaving} className="mt-3 grid grid-cols-2 gap-2 border-t border-line pt-3">
+          {hidden}
+          <select name="owner" className={selectClass} aria-label="누구">
+            {OWNERS.map((o) => <option key={o}>{o}</option>)}
+          </select>
+          <select name="kind" className={selectClass} aria-label="종류">
+            <option value="saving">저축</option>
+            <option value="investment">투자</option>
+          </select>
+          <label className="col-span-2 flex flex-col gap-1 text-xs text-muted">
+            빠진 계좌
+            <select name="from" defaultValue={kakao?.id} className={selectClass}>
+              {accounts.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <label className="col-span-2 flex flex-col gap-1 text-xs text-muted">
+            들어간 계좌
+            <select name="to" className={selectClass}>
+              {accounts
+                .filter((a) => a.kind === "saving" || a.kind === "investment")
+                .map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+            </select>
+          </label>
+          <input name="amount" inputMode="numeric" placeholder="금액" className={`${inputClass} col-span-2`} required />
+          <GhostButton type="submit" className="col-span-2">+ 저축 · 투자 추가</GhostButton>
+        </form>
+      </Card>
+
+      {/* 5. 현금 */}
+      <Card id="cash" className="scroll-mt-4">
+        <CardTitle>5. 현금</CardTitle>
+        <form action={saveCash} className="flex flex-col gap-2">
+          {hidden}
+          <label className="flex items-center justify-between gap-3 text-sm">
+            축의금 (현금 지출)
+            <input name="gift_cash" inputMode="numeric" defaultValue={monthRow?.gift_cash ? won(monthRow.gift_cash) : ""} placeholder="0" className={`${inputClass} w-36 text-right`} />
+          </label>
+          <label className="flex items-center justify-between gap-3 text-sm">
+            집 보관 현금 증감
+            <input name="new_cash" inputMode="numeric" defaultValue={monthRow?.new_cash ? won(monthRow.new_cash) : ""} placeholder="0" className={`${inputClass} w-36 text-right`} />
+          </label>
+          <input name="note" defaultValue={monthRow?.note ?? ""} placeholder="메모" className={inputClass} />
+          <GhostButton type="submit">저장</GhostButton>
+        </form>
+      </Card>
+
+      <p className="px-1 text-xs text-muted">
+        잔액 대조와 마감은 다음 업데이트에서 붙어요.
+      </p>
+
+      <BottomNav active="/settle" />
+    </main>
+  );
+}
