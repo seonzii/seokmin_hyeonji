@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { MonthPicker } from "@/components/month-picker";
 import {
   BottomNav,
   Card,
@@ -37,16 +38,14 @@ export default async function OverviewPage({
   const { year, month, en } = monthParts(key);
 
   const header = (
-    <PageHeader
-      eyebrow={`${year} · ${en}`}
-      title={`${month}월의 살림`}
-      right={
-        <div className="flex text-lg text-brown">
-          <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, -1)}`} aria-label="이전 달">‹</Link>
-          <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, 1)}`} aria-label="다음 달">›</Link>
-        </div>
-      }
-    />
+    <>
+      <PageHeader eyebrow={`${year} · ${en}`} title={`${month}월의 살림`} />
+      <div className="flex items-center justify-between text-lg text-brown">
+        <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, -1)}`} aria-label="이전 달">‹</Link>
+        <MonthPicker value={key} from={2024} href="/overview?m=" />
+        <Link className="flex size-11 items-center justify-center" href={`/overview?m=${shiftMonth(key, 1)}`} aria-label="다음 달">›</Link>
+      </div>
+    </>
   );
 
   if (!householdId) {
