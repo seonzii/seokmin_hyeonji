@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 import { getHousehold } from "@/lib/household";
 import { parseWon } from "@/lib/money";
 import { isMonthKey, monthDate } from "@/lib/month";
@@ -220,4 +221,6 @@ export async function setMonthStatus(fd: FormData) {
     .eq("month", month);
   done(key);
   revalidatePath("/history");
+  // 마감하면 정산개요가 다음 달을 보여준다
+  if (closed) redirect("/overview");
 }

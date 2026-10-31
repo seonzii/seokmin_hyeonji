@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { currentMonthKey, shiftMonth } from "@/lib/month";
 import { createClient } from "@/lib/supabase/server";
 
 /** 로그인한 사람과 그 사람의 집. 집에 연결이 안 돼 있으면 null */
@@ -34,4 +35,26 @@ export async function ensureMonth(
       { household_id: householdId, month },
       { onConflict: "household_id,month", ignoreDuplicates: true },
     );
+}
+
+/**
+ * 지금 정산할 달: 마지막으로 마감한 달의 다음 달.
+ * 마감한 달이 없거나 그보다 이번 달이 늦으면 이번 달.
+ */
+export async function workingMonthKey(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  householdId: string,
+): Promise<string> {
+  const now = currentMonthKey();
+  const { data } = await supabase
+    .from("months")
+    .select("month")
+    .eq("household_id", householdId)
+    .eq("status", "closed")
+    .order("month", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data) return now;
+  const next = shiftMonth((data.month as string).slice(0, 7), 1);
+  return next > now ? next : now;
 }

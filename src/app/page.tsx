@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { ArchPhoto, DdayRow } from "@/components/cover";
 import { BottomNav } from "@/components/ui";
+import { getHousehold, workingMonthKey } from "@/lib/household";
 import { currentMonthKey, monthParts } from "@/lib/month";
 import { currentLoginPhoto } from "@/lib/photo";
 
@@ -8,8 +9,8 @@ export const dynamic = "force-dynamic";
 
 /** 로그인 화면과 같은 표지. 비밀번호 칸 대신 바로가기 */
 export default async function Home() {
-  const photo = await currentLoginPhoto();
-  const key = currentMonthKey();
+  const [photo, { supabase, householdId }] = await Promise.all([currentLoginPhoto(), getHousehold()]);
+  const key = householdId ? await workingMonthKey(supabase, householdId) : currentMonthKey();
   const { month } = monthParts(key);
 
   return (
