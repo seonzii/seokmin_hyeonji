@@ -4,6 +4,7 @@ import { BottomNav, Card, CardTitle, inputClass, NotLinked, PageHeader, Row } fr
 import { getHousehold } from "@/lib/household";
 import { won } from "@/lib/money";
 import { currentMonthKey, isMonthKey, monthDate, monthParts, shiftMonth } from "@/lib/month";
+import { MonthPicker, YearPicker as YearSelect } from "@/components/month-picker";
 import type { MonthSummary } from "@/lib/summary";
 
 export const dynamic = "force-dynamic";
@@ -140,7 +141,11 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
       <>
         <form className="flex gap-2">
           <input type="hidden" name="tab" value="item" />
-          <input type="hidden" name="y" value={year} />
+          <select name="y" defaultValue={year} aria-label="연도" className={`${inputClass} w-24 px-2`}>
+            {Array.from({ length: monthParts(currentMonthKey()).year + 1 - 2024 + 1 }, (_, i) => 2024 + i).map((y) => (
+              <option key={y} value={y}>{y}년</option>
+            ))}
+          </select>
           <input name="q" defaultValue={q} placeholder="항목 검색 (관리비, 쿠팡…)" className={`${inputClass} flex-1`} />
           <button className="h-11 rounded-xl bg-brown px-4 text-sm text-paper">검색</button>
         </form>
@@ -202,9 +207,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <>
       <div className="flex items-center justify-between">
         <Link href={`/history?tab=month&m=${shiftMonth(key, -1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="이전 달">‹</Link>
-        <span className="font-serif text-lg font-semibold">
-          {monthParts(key).year}년 {monthParts(key).month}월
-        </span>
+        <MonthPicker value={key} hrefFor={(k) => `/history?tab=month&m=${k}`} />
         <Link href={`/history?tab=month&m=${shiftMonth(key, 1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="다음 달">›</Link>
       </div>
       {!s ? (
@@ -272,7 +275,7 @@ function YearPicker({ year }: { year: number }) {
   return (
     <div className="flex items-center justify-between">
       <Link href={`/history?tab=year&y=${year - 1}`} className="flex size-11 items-center justify-center text-brown" aria-label="이전 해">‹</Link>
-      <span className="font-serif text-lg font-semibold">{year}년</span>
+      <YearSelect value={year} from={2024} to={monthParts(currentMonthKey()).year + 1} hrefFor={(y) => `/history?tab=year&y=${y}`} />
       <Link href={`/history?tab=year&y=${year + 1}`} className="flex size-11 items-center justify-center text-brown" aria-label="다음 해">›</Link>
     </div>
   );

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { BottomNav, Card, CardTitle, GhostButton, PageHeader, Row } from "@/components/ui";
 import { getHousehold } from "@/lib/household";
 import { currentLoginPhoto } from "@/lib/photo";
@@ -25,6 +26,14 @@ export default async function SettingsPage() {
         </div>
         <PhotoUpload />
       </Card>
+
+      <Link href="/settings/manage" className="flex items-center justify-between rounded-2xl border border-line bg-card p-4 text-sm">
+        <span>
+          계좌 · 카드 · 고정지출 관리
+          <span className="mt-0.5 block text-xs text-muted">새 카드나 고정지출이 생기면 여기서 추가해요</span>
+        </span>
+        <span className="text-brown">›</span>
+      </Link>
 
       <Card>
         <CardTitle>계정</CardTitle>
