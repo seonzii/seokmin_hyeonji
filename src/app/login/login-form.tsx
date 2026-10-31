@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState } from "react";
+import { markUnlocked } from "@/components/app-lock";
 import { login, type LoginState } from "./actions";
 
 const initialState: LoginState = { error: null };
@@ -9,7 +10,7 @@ export function LoginForm() {
   const [state, formAction, pending] = useActionState(login, initialState);
 
   return (
-    <form action={formAction} className="flex flex-col gap-2">
+    <form action={formAction} onSubmit={markUnlocked} className="flex flex-col gap-2">
       <div className="flex items-center gap-3.5">
         <label htmlFor="password" className="sr-only">
           비밀번호
