@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Noto_Serif_KR } from "next/font/google";
 import "./globals.css";
+import { AppLock } from "@/components/app-lock";
 
 const notoSerifKr = Noto_Serif_KR({
   variable: "--font-noto-serif-kr",
@@ -38,7 +39,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="ko">
-      <body className={`${notoSerifKr.variable} min-h-dvh`}>{children}</body>
+      <body className={`${notoSerifKr.variable} min-h-dvh`}>
+        {children}
+        <AppLock />
+      </body>
     </html>
   );
 }
