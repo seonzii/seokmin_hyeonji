@@ -118,6 +118,7 @@ export function PageHeader({
 
 const TABS = [
   { href: "/", label: "홈" },
+  { href: "/overview", label: "개요" },
   { href: "/settle", label: "정산" },
   { href: "/history", label: "조회" },
   { href: "/invest", label: "투자" },
@@ -132,7 +133,7 @@ export function BottomNav({ active }: { active: (typeof TABS)[number]["href"] })
           <Link
             key={t.href}
             href={t.href}
-            className={`flex h-14 flex-1 items-center justify-center text-sm ${
+            className={`flex h-14 flex-1 items-center justify-center text-[13px] ${
               t.href === active ? "font-semibold text-ink" : "text-muted"
             }`}
           >

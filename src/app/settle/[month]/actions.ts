@@ -16,6 +16,7 @@ async function context(fd: FormData) {
 function done(key: string) {
   revalidatePath(`/settle/${key}`);
   revalidatePath("/");
+  revalidatePath("/overview");
 }
 
 function text(fd: FormData, name: string) {
