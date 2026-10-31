@@ -13,17 +13,21 @@ import {
   Row,
   selectClass,
 } from "@/components/ui";
+import { bookBalances } from "@/lib/balances";
 import { ensureMonth, getHousehold } from "@/lib/household";
 import { won } from "@/lib/money";
 import { isMonthKey, monthDate, monthParts, shiftMonth } from "@/lib/month";
 import {
   addCardItem,
   addIncome,
+  addAdjustment,
   addSaving,
   confirmFixed,
   deleteRow,
+  saveBalance,
   saveCardTotal,
   saveCash,
+  setMonthStatus,
 } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -67,6 +71,7 @@ const SECTIONS = [
   ["fixed", "고정지출"],
   ["saving", "저축"],
   ["cash", "현금"],
+  ["check", "대조·마감"],
 ] as const;
 
 export default async function SettlePage({
@@ -105,7 +110,7 @@ export default async function SettlePage({
 
   await ensureMonth(supabase, householdId, m);
   const h = householdId;
-  const [acc, crd, tpl, inc, bil, itm, prevItm, sav, mon] = await Promise.all([
+  const [acc, crd, tpl, inc, bil, itm, prevItm, sav, mon, chk, adj, books] = await Promise.all([
     supabase.from("accounts").select("id, name, kind").eq("household_id", h).eq("active", true).order("sort_order"),
     supabase.from("cards").select("id, name, owner_name, payment_account_id").eq("household_id", h).eq("active", true).order("sort_order"),
     supabase.from("fixed_templates").select("*").eq("household_id", h).eq("active", true).order("sort_order"),
@@ -115,6 +120,9 @@ export default async function SettlePage({
     supabase.from("expense_items").select("template_id, amount").eq("household_id", h).eq("month", prev).not("template_id", "is", null),
     supabase.from("savings").select("*").eq("household_id", h).eq("month", m),
     supabase.from("months").select("gift_cash, new_cash, note, status").eq("household_id", h).eq("month", m).single(),
+    supabase.from("balance_checks").select("account_id, actual").eq("household_id", h).eq("month", m),
+    supabase.from("adjustments").select("id, account_id, amount, memo").eq("household_id", h).eq("month", m),
+    bookBalances(supabase, h, m),
   ]);
 
   const accounts = (acc.data ?? []) as Account[];
@@ -124,7 +132,12 @@ export default async function SettlePage({
   const bills = (bil.data ?? []) as Bill[];
   const items = (itm.data ?? []) as Item[];
   const savings = (sav.data ?? []) as Saving[];
-  const monthRow = mon.data as { gift_cash: number; new_cash: number; note: string | null } | null;
+  const monthRow = mon.data as { gift_cash: number; new_cash: number; note: string | null; status: string } | null;
+  const closed = monthRow?.status === "closed";
+  const checks = new Map(
+    ((chk.data ?? []) as { account_id: string; actual: number }[]).map((c) => [c.account_id, Number(c.actual)]),
+  );
+  const adjustments = (adj.data ?? []) as { id: string; account_id: string; amount: number; memo: string }[];
 
   const accName = (id: string | null) => accounts.find((a) => a.id === id)?.name ?? "";
   const cardName = (id: string | null) => cards.find((c) => c.id === id)?.name ?? "";
@@ -176,6 +189,13 @@ export default async function SettlePage({
         ))}
       </nav>
 
+      {closed && (
+        <div className="rounded-xl bg-caramel-tint px-4 py-3 text-sm text-caramel-deep">
+          {month}월은 마감했어요. 고치려면 맨 아래에서 마감을 풀어 주세요.
+        </div>
+      )}
+
+      <fieldset disabled={closed} className="contents">
       {/* 1. 수입 */}
       <Card id="income" className="scroll-mt-4">
         <CardTitle right={won(incomeTotal)}>1. 수입</CardTitle>
@@ -352,9 +372,92 @@ export default async function SettlePage({
         </form>
       </Card>
 
-      <p className="px-1 text-xs text-muted">
-        잔액 대조와 마감은 다음 업데이트에서 붙어요.
-      </p>
+      </fieldset>
+
+      {/* 6. 잔액 대조 · 마감 */}
+      <Card id="check" className="scroll-mt-4">
+        <CardTitle>6. 잔액 대조 · 마감</CardTitle>
+        <p className="mb-3 text-xs text-muted">
+          은행 앱의 실제 잔액을 입력하면 장부와 차이를 보여줘요.
+        </p>
+        {books.map(({ account, book }) => {
+          const actual = checks.get(account.id);
+          const diff = actual === undefined ? null : actual - book;
+          return (
+            <div key={account.id} className="border-t border-line py-3 first-of-type:border-t-0">
+              <div className="flex items-baseline justify-between text-sm">
+                <span>{account.name}</span>
+                <span className="text-muted">장부 {won(book)}</span>
+              </div>
+              <form action={saveBalance} className="mt-2 flex gap-2">
+                {hidden}
+                <input type="hidden" name="account_id" value={account.id} />
+                <input
+                  name="actual"
+                  inputMode="numeric"
+                  defaultValue={actual === undefined ? "" : won(actual)}
+                  placeholder="실제 잔액"
+                  aria-label={`${account.name} 실제 잔액`}
+                  className={`${inputClass} flex-1`}
+                />
+                <GhostButton type="submit">확인</GhostButton>
+              </form>
+              <div
+                className={`mt-2 rounded-lg px-3 py-2 text-[13px] ${
+                  diff === null
+                    ? "bg-paper text-muted"
+                    : diff === 0
+                      ? "bg-caramel-tint text-caramel-deep"
+                      : "bg-warn-tint text-warn"
+                }`}
+              >
+                {diff === null
+                  ? "실제 잔액을 입력하세요"
+                  : diff === 0
+                    ? "일치해요"
+                    : `차이 ${diff > 0 ? "+" : "−"}${won(Math.abs(diff))}원 · 빠진 항목이 있는지 확인하거나 보정을 넣으세요`}
+              </div>
+            </div>
+          );
+        })}
+
+        <details className="mt-2 border-t border-line pt-3">
+          <summary className="cursor-pointer text-sm text-caramel-deep">
+            보정 {adjustments.length ? `${adjustments.length}건` : "추가"} (대출 상환처럼 장부 밖에서 오간 돈)
+          </summary>
+          {adjustments.map((j) => (
+            <Row
+              key={j.id}
+              label={j.memo}
+              sub={accName(j.account_id)}
+              value={`${j.amount > 0 ? "+" : "−"}${won(Math.abs(j.amount))}`}
+              action={closed ? undefined : del("adjustments", j.id)}
+            />
+          ))}
+          <form action={addAdjustment} className="mt-2 grid grid-cols-2 gap-2">
+            {hidden}
+            <select name="account_id" className={`${selectClass} col-span-2`} aria-label="계좌">
+              {books.map(({ account }) => <option key={account.id} value={account.id}>{account.name}</option>)}
+            </select>
+            <input name="amount" inputMode="numeric" placeholder="금액 (빠지면 -)" className={inputClass} required disabled={closed} />
+            <input name="memo" placeholder="메모" className={inputClass} required disabled={closed} />
+            <GhostButton type="submit" className="col-span-2" disabled={closed}>+ 보정 추가</GhostButton>
+          </form>
+        </details>
+
+        <form action={setMonthStatus} className="mt-4">
+          {hidden}
+          <input type="hidden" name="status" value={closed ? "draft" : "closed"} />
+          {closed ? (
+            <GhostButton type="submit" className="w-full">마감 풀기</GhostButton>
+          ) : (
+            <PrimaryButton type="submit" className="w-full">{month}월 마감하기</PrimaryButton>
+          )}
+          <p className="mt-2 text-center text-xs text-muted">
+            마감하면 {month}월은 잠기고, 장부 잔액이 다음 달로 이어져요
+          </p>
+        </form>
+      </Card>
 
       <BottomNav active="/settle" />
     </main>

@@ -118,10 +118,13 @@ export function PageHeader({
 
 const TABS = [
   { href: "/", label: "홈" },
-  { href: "/settle", label: "월 정산" },
+  { href: "/settle", label: "정산" },
+  { href: "/history", label: "조회" },
+  { href: "/invest", label: "투자" },
+  { href: "/settings", label: "설정" },
 ] as const;
 
-export function BottomNav({ active }: { active: "/" | "/settle" }) {
+export function BottomNav({ active }: { active: (typeof TABS)[number]["href"] }) {
   return (
     <nav className="fixed inset-x-0 bottom-0 border-t border-line bg-card pb-[env(safe-area-inset-bottom)]">
       <div className="mx-auto flex max-w-[430px]">

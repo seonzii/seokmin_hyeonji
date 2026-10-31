@@ -7,6 +7,7 @@ import {
   PageHeader,
   Row,
 } from "@/components/ui";
+import { bookBalances } from "@/lib/balances";
 import { getHousehold } from "@/lib/household";
 import { won } from "@/lib/money";
 import {
@@ -16,7 +17,6 @@ import {
   shiftMonth,
 } from "@/lib/month";
 import { spending, type MonthSummary } from "@/lib/summary";
-import { logout } from "./login/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -29,16 +29,6 @@ export default async function Home() {
     <PageHeader
       eyebrow={`${year} · ${en}`}
       title={`${month}월의 살림`}
-      right={
-        <form action={logout}>
-          <button
-            type="submit"
-            className="h-11 rounded-full border border-brown px-3 text-xs text-brown"
-          >
-            로그아웃
-          </button>
-        </form>
-      }
     />
   );
 
@@ -60,6 +50,7 @@ export default async function Home() {
     .lte("month", monthDate(key))
     .order("month");
   const rows = (data ?? []) as MonthSummary[];
+  const books = await bookBalances(supabase, householdId, monthDate(key));
   const now = rows.find((r) => r.month === monthDate(key));
 
   const bars = Array.from({ length: 6 }, (_, i) => {
@@ -78,6 +69,16 @@ export default async function Home() {
         <div className="mt-1 font-serif text-[30px] font-semibold tracking-[-0.5px]">
           {won(now ? spending(now) : 0)}원
         </div>
+        {books.length > 0 && (
+          <div className="mt-3 flex flex-col gap-1 border-t border-paper/25 pt-3 text-[13px]">
+            {books.map(({ account, book }) => (
+              <div key={account.id} className="flex justify-between">
+                <span className="opacity-80">{account.name} 장부</span>
+                <span>{won(book)}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div className="mt-2 text-xs opacity-80">
           {now?.status === "closed" ? "마감한 달이에요" : "정산 중이에요"}
         </div>
