@@ -207,7 +207,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <>
       <div className="flex items-center justify-between">
         <Link href={`/history?tab=month&m=${shiftMonth(key, -1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="이전 달">‹</Link>
-        <MonthPicker value={key} hrefFor={(k) => `/history?tab=month&m=${k}`} />
+        <MonthPicker value={key} from={2024} href="/history?tab=month&m=" />
         <Link href={`/history?tab=month&m=${shiftMonth(key, 1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="다음 달">›</Link>
       </div>
       {!s ? (
@@ -275,7 +275,7 @@ function YearPicker({ year }: { year: number }) {
   return (
     <div className="flex items-center justify-between">
       <Link href={`/history?tab=year&y=${year - 1}`} className="flex size-11 items-center justify-center text-brown" aria-label="이전 해">‹</Link>
-      <YearSelect value={year} from={2024} to={monthParts(currentMonthKey()).year + 1} hrefFor={(y) => `/history?tab=year&y=${y}`} />
+      <YearSelect value={year} from={2024} to={monthParts(currentMonthKey()).year + 1} href="/history?tab=year&y=" />
       <Link href={`/history?tab=year&y=${year + 1}`} className="flex size-11 items-center justify-center text-brown" aria-label="다음 해">›</Link>
     </div>
   );
