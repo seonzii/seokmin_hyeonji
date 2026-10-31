@@ -7,7 +7,7 @@ declare
   m date := '2026-10-01';
   kakao uuid := (select id from accounts where household_id = h and name = '카카오뱅크');
   toss uuid := (select id from accounts where household_id = h and name = '토스뱅크(결혼하자)');
-  isa_s uuid := (select id from accounts where household_id = h and name = 'ISA (석민)');
+  isa_s uuid := (select id from accounts where household_id = h and owner_name = '석민' and name like 'ISA%' limit 1);
   hana uuid; lotte uuid; hyundai uuid;
 begin
   if kakao is null then
