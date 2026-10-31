@@ -33,11 +33,12 @@ begin
   -- 카드 청구 총액
   insert into card_bills (household_id, month, card_id, total)
   select h, m, id, case name when '하나카드' then 1602896 when '롯데카드' then 751918 else 1937644 end
-  from cards where household_id = h and name in ('하나카드', '롯데카드', '현대카드');
+  from cards where household_id = h
+    and ((name, owner_name) in (('하나카드', '현지'), ('롯데카드', '현지'), ('현대카드', '석민')));
 
-  select b.id into hana from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '하나카드';
-  select b.id into lotte from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '롯데카드';
-  select b.id into hyundai from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '현대카드';
+  select b.id into hana from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '하나카드' and c.owner_name = '현지';
+  select b.id into lotte from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '롯데카드' and c.owner_name = '현지';
+  select b.id into hyundai from card_bills b join cards c on c.id = b.card_id where b.household_id = h and b.month = m and c.name = '현대카드' and c.owner_name = '석민';
 
   -- 카드 큰 항목
   insert into expense_items (household_id, month, kind, title, amount, card_bill_id) values
