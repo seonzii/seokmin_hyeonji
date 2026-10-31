@@ -207,7 +207,7 @@ export default async function HistoryPage({ searchParams }: { searchParams: Prom
     <>
       <div className="flex items-center justify-between">
         <Link href={`/history?tab=month&m=${shiftMonth(key, -1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="이전 달">‹</Link>
-        <MonthPicker value={key} hrefFor={(k) => `/history?tab=month&m=${k}`} />
+        <MonthPicker value={key} from={2024} hrefFor={(k) => `/history?tab=month&m=${k}`} />
         <Link href={`/history?tab=month&m=${shiftMonth(key, 1)}`} className="flex size-11 items-center justify-center text-brown" aria-label="다음 달">›</Link>
       </div>
       {!s ? (
