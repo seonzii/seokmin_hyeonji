@@ -1,0 +1,33 @@
+@import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css";
+
+/* 화면 시안 "디자인 규칙" 메모와 같은 값 */
+@theme {
+  --color-paper: #f4f1ea;
+  --color-card: #ffffff;
+  --color-line: #e2dccf;
+  --color-line-strong: #cfc8ba;
+  --color-ink: #1c1b18;
+  --color-muted: #4f4a42;
+  --color-brown: #4a3428;
+  --color-caramel: #8a5a2b;
+  --color-caramel-deep: #5e3d1f;
+  --color-caramel-tint: #f3e8dc;
+  --color-warn: #92400e;
+  --color-warn-tint: #fef3c7;
+
+  --font-sans: "Pretendard Variable", Pretendard, system-ui, sans-serif;
+  --font-serif: var(--font-noto-serif-kr), "Nanum Myeongjo", serif;
+}
+
+html,
+body {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
